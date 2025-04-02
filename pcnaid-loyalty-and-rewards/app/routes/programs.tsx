@@ -1,129 +1,143 @@
-import { AppProvider } from "@shopify/polaris";
-import { Outlet } from "@remix-run/react";
-import { AppProvider as PolarisAppProvider } from "@shopify/polaris"; // Import Polaris components
-import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
-import { useEffect } from "react";
-import type { LoaderFunctionArgs } from "@remix-run/node";
-import { json } from "@remix-run/node";
-import { useFetcher, useLoaderData, useMatches } from "@remix-run/react";
+import { json, type LoaderFunctionArgs } from "@remix-run/node";
+import { useLoaderData, useSubmit } from "@remix-run/react";
 import {
   Page,
   Layout,
-  Text,
   Card,
+  FormLayout,
+  TextField,
   Button,
-  BlockStack,
-  Box,
-  List,
-  InlineStack,
+  Text,
+  Banner,
 } from "@shopify/polaris";
-import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
-
-export const links = () => [{ rel: "stylesheet", href: polarisStyles }];
+import { db } from "../db.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-
-  const queryParams = new URL(request.url).searchParams;
-
-  await authenticate.admin(request);
-  const programs = [
-    { id: 1, name: "Bronze Tier", status: "Enabled" },
-    { id: 2, name: "Silver Tier", status: "Disabled" },
-  ];
-  return json({ programs });
+  const { admin } = await authenticate.admin(request);
+  
+  // Get the shop from the session
+  const session = await admin.session;
+  const shop = session.shop;
+  
+  // Find or create program settings for this shop
+  let programSettings = await db.programSetting.findUnique({
+    where: { shopId: shop }
+  });
+  
+  if (!programSettings) {
+    // Default settings
+    programSettings = {
+      shopId: shop,
+      pointsPerDollar: 10,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+  }
+  
+  return json({ programSettings });
 };
 
-export default function Programs() {
-  const matches = useMatches();
-  const { programs } = useLoaderData<typeof loader>();
-  const rootData = matches.find((m) => m.id === "root")?.data as { apiKey: string };
-  const apiKey = rootData.apiKey;
-  const fetcher = useFetcher();
+export const action = async ({ request }: LoaderFunctionArgs) => {
+  const { admin } = await authenticate.admin(request);
+  
+  // Get the shop from the session
+  const session = await admin.session;
+  const shop = session.shop;
+  
+  // Get form data
+  const formData = await request.formData();
+  const pointsPerDollar = parseFloat(formData.get("pointsPerDollar") as string);
+  
+  // Validate input
+  if (isNaN(pointsPerDollar) || pointsPerDollar <= 0) {
+    return json({ 
+      error: "Points per dollar must be a positive number",
+      programSettings: { pointsPerDollar: formData.get("pointsPerDollar") }
+    }, { status: 400 });
+  }
+  
+  try {
+    // Update or create program settings
+    const programSettings = await db.programSetting.upsert({
+      where: { shopId: shop },
+      update: { 
+        pointsPerDollar,
+        updatedAt: new Date()
+      },
+      create: {
+        shopId: shop,
+        pointsPerDollar,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }
+    });
+    
+    return json({ 
+      programSettings,
+      success: "Loyalty program settings saved successfully"
+    });
+  } catch (error) {
+    console.error("Error saving program settings:", error);
+    return json({ 
+      error: "Failed to save program settings",
+      programSettings: { pointsPerDollar: formData.get("pointsPerDollar") }
+    }, { status: 500 });
+  }
+};
 
-  useEffect(() => {
-
-    if (fetcher.state === "idle" && fetcher.data) {
-      // Update UI or show a notification based on fetcher.data
-    }
-  }, [fetcher]);
-
-  const handleProgramAction = (programId: number, action: string) => {
-    fetcher.submit(
-      { programId, action },
-      { method: "post", action: "/programs/actions" }
-    );
+export default function ProgramSettings() {
+  const { programSettings, success, error } = useLoaderData<typeof loader>();
+  const submit = useSubmit();
+  
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    submit(event.currentTarget, { replace: true });
   };
-
-
-
+  
   return (
-    <Page
-      title="Loyalty Programs"
-      primaryAction={{
-        content: "Create Program",
-        onAction: () => {
-          window.location.href = "/programs/create";
-        },
-      }}
-    >
+    <Page title="Loyalty Program Settings">
       <Layout>
         <Layout.Section>
+          {error && (
+            <Banner status="critical">
+              <p>{error}</p>
+            </Banner>
+          )}
+          
+          {success && (
+            <Banner status="success">
+              <p>{success}</p>
+            </Banner>
+          )}
+          
           <Card>
-            <List>
-              {programs.map((program) => (
-                <List.Item key={program.id}>
-                  <InlineStack>
-                    <Box>
-                      <Text as="p" variant="bodyMd" fontWeight="bold">
-                        {program.name}
-                      </Text>
-                      <Text as="p" variant="bodySm">
-                        Status: {program.status}
-                      </Text>
-                    </Box>
-                    <InlineStack>
-                      <Button
-                        onClick={() => handleProgramAction(program.id, "enable")}
-                        disabled={program.status === "Enabled"}
-                      >
-                        Enable
-                      </Button>
-                      <Button
-                        onClick={() => handleProgramAction(program.id, "disable")}
-                        disabled={program.status === "Disabled"}
-                      >
-                        Disable
-                      </Button>
-                      <Button
-                        onClick={() => {
-                          window.location.href = `/programs/${program.id}/edit`;
-                        }}
-                      >
-                        Edit
-                      </Button>
-                    </InlineStack>
-                  </InlineStack>
-                </List.Item>
-              ))}
-            </List>
+            <form onSubmit={handleSubmit}>
+              <FormLayout>
+                <Text variant="headingMd" as="h2">
+                  Points Configuration
+                </Text>
+                
+                <TextField
+                  label="Points per dollar spent"
+                  type="number"
+                  name="pointsPerDollar"
+                  value={String(programSettings.pointsPerDollar)}
+                  helpText="How many points customers earn for each dollar spent"
+                  autoComplete="off"
+                  min="0.1"
+                  step="0.1"
+                  required
+                />
+                
+                <Button submit primary>
+                  Save settings
+                </Button>
+              </FormLayout>
+            </form>
           </Card>
         </Layout.Section>
       </Layout>
     </Page>
   );
 }
-
-export const action = async ({ request }: { request: Request }) => {
-  const formData = await request.formData();
-  const programId = formData.get("programId");
-  const action = formData.get("action");
-
-  if (typeof programId !== "string" || typeof action !== "string") {
-    throw new Error("Invalid form submission");
-  }
-
-  // Implement program actions (e.g., enable/disable, edit) here
-
-  return json({ success: true });
-};

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 
 import {
   reactExtension,
@@ -7,100 +7,174 @@ import {
   POSBlockRow,
   useApi,
   Button,
+  useToast,
 } from "@shopify/ui-extensions-react/point-of-sale";
 
-import { useLoyaltyPoints } from "./useLoyaltyPoints";
 import { applyDiscount } from "./applyDiscount";
 
 // For development purposes, we'll use a local server
 export const serverUrl =
   "https://hrs-macintosh-graph-testimonials.trycloudflare.com";
-// [START loyalty-points-block.discounts]
-// 1. Define discount tiers and available discounts
-const discountTiers = [
-  { pointsRequired: 100, discountValue: 5 },
-  { pointsRequired: 200, discountValue: 10 },
-  { pointsRequired: 300, discountValue: 15 },
-];
-// [END loyalty-points-block.discounts]
+
 const LoyaltyPointsBlock = () => {
   // [START loyalty-points-block.api]
-  // 2. Initialize API
+  // Initialize API
   const api = useApi<"pos.customer-details.block.render">();
   const customerId = api.customer.id;
   const [pointsTotal, setPointsTotal] = useState<number | null>(null);
+  const [eligibleRewards, setEligibleRewards] = useState<any[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const toast = useToast();
   // [END loyalty-points-block.api]
 
-  // [START loyalty-points-block.use-loyalty-points]
-  // 3. Pass setPointsTotal to useLoyaltyPoints to calculate the points total
-  const { loading } = useLoyaltyPoints(api, customerId, setPointsTotal);
-  // [END loyalty-points-block.use-loyalty-points]
+  // Fetch customer points and eligible rewards
+  useEffect(() => {
+    const fetchCustomerData = async () => {
+      if (!customerId) {
+        setLoading(false);
+        return;
+      }
 
-  // [START loyalty-points-block.available-discounts]
-  // 4. Filter available discounts based on points total
-  const availableDiscounts = pointsTotal
-    ? discountTiers.filter((tier) => pointsTotal >= tier.pointsRequired)
-    : [];
-  // [END loyalty-points-block.available-discounts]
+      try {
+        setLoading(true);
+        // Get the session token
+        const sessionToken = await api.session.getSessionToken();
+
+        const response = await fetch(`${serverUrl}/points/${customerId}`, {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${sessionToken}`,
+          },
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error("Error Response Text:", errorText);
+          throw new Error(`Failed to fetch customer data: ${errorText}`);
+        }
+
+        const data = await response.json();
+
+        if (typeof data.totalPoints === "number") {
+          setPointsTotal(data.totalPoints);
+        } else {
+          console.error("No points available in the response.");
+          setError("Could not retrieve points balance");
+        }
+
+        if (Array.isArray(data.eligibleRewards)) {
+          setEligibleRewards(data.eligibleRewards);
+        } else {
+          console.error("No eligible rewards in the response.");
+        }
+      } catch (error) {
+        console.error("Error fetching customer data:", error);
+        setError("Failed to load loyalty data");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCustomerData();
+  }, [api, customerId]);
+
+  // Handle applying a reward
+  const handleApplyReward = async (reward: any) => {
+    try {
+      // Determine discount type and value
+      const discountType = reward.discountType === "PERCENTAGE" ? "Percentage" : "FixedAmount";
+      const discountValue = reward.discountValue;
+      const pointsRequired = reward.pointsRequired;
+      
+      // Apply the discount to the cart
+      await applyDiscount(
+        api,
+        customerId,
+        discountValue,
+        pointsRequired,
+        setPointsTotal,
+        discountType
+      );
+      
+      // Show success message
+      toast.show(`Reward applied: ${reward.name}`);
+      
+      // Update eligible rewards based on new points balance
+      setEligibleRewards(prev => 
+        prev.filter(r => (pointsTotal! - pointsRequired) >= r.pointsRequired)
+      );
+    } catch (error) {
+      console.error("Error applying reward:", error);
+      toast.show("Failed to apply reward", { error: true });
+    }
+  };
+
   if (loading) {
-    return <Text>Loading...</Text>;
+    return (
+      <POSBlock>
+        <POSBlockRow>
+          <Text>Loading loyalty data...</Text>
+        </POSBlockRow>
+      </POSBlock>
+    );
+  }
+
+  if (error) {
+    return (
+      <POSBlock>
+        <POSBlockRow>
+          <Text color="TextWarning">{error}</Text>
+        </POSBlockRow>
+      </POSBlock>
+    );
   }
 
   if (pointsTotal === null) {
     return (
       <POSBlock>
         <POSBlockRow>
-          <Text color="TextWarning">Unable to fetch points total.</Text>
+          <Text color="TextWarning">No loyalty data available for this customer.</Text>
         </POSBlockRow>
       </POSBlock>
     );
   }
+
   return (
     <POSBlock>
       <POSBlockRow>
         <Text variant="headingLarge" color="TextSuccess">
-          {/* [START loyalty-points-block.display-points] */}
-          {/* 5. Display the points total */}
-          Point Balance:{pointsTotal}
+          Points Balance: {pointsTotal}
         </Text>
       </POSBlockRow>
-      {/* [END loyalty-points-block.display-points] */}
-      {availableDiscounts.length > 0 ? (
-        <POSBlockRow>
-          <Text variant="headingSmall">Available Discounts:</Text>
-          {/* [START loyalty-points-block.display-discounts] */}
-          {/* 6. Display available discounts as buttons, calling applyDiscount */}
-          {availableDiscounts.map((tier, index) => (
-            <POSBlockRow key={`${tier.pointsRequired}-${index}`}>
+      
+      {eligibleRewards.length > 0 ? (
+        <>
+          <POSBlockRow>
+            <Text variant="headingSmall">Available Rewards:</Text>
+          </POSBlockRow>
+          {eligibleRewards.map((reward, index) => (
+            <POSBlockRow key={`${reward.id}-${index}`}>
               <Button
-                title={`Redeem $${tier.discountValue} Discount (Use ${tier.pointsRequired} points)`}
+                title={`${reward.name} (${reward.pointsRequired} points)`}
                 type="primary"
-                onPress={() =>
-                  applyDiscount(
-                    api,
-                    customerId,
-                    tier.discountValue,
-                    tier.pointsRequired,
-                    setPointsTotal,
-                  )
-                }
+                onPress={() => handleApplyReward(reward)}
               />
             </POSBlockRow>
           ))}
-        </POSBlockRow>
+        </>
       ) : (
         <POSBlockRow>
           <Text variant="headingSmall" color="TextWarning">
-            No available discounts.
+            No available rewards.
           </Text>
         </POSBlockRow>
       )}
     </POSBlock>
   );
 };
-// 7. Render the LoyaltyPointsBlock component at the appropriate target
-// [START loyalty-points-block.render]
+
+// Render the LoyaltyPointsBlock component at the appropriate target
 export default reactExtension("pos.customer-details.block.render", () => (
   <LoyaltyPointsBlock />
 ));
-// [END loyalty-points-block.render]

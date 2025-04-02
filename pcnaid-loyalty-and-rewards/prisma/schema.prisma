@@ -1,10 +1,8 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
-
 // Note that some adapters may set a maximum length for the String type by default, please ensure your strings are long
 // enough when changing adapters.
 // See https://www.prisma.io/docs/orm/reference/prisma-schema-reference#string for more information
@@ -12,7 +10,6 @@ datasource db {
   provider = "sqlite"
   url      = "file:dev.sqlite"
 }
-
 model Session {
   id            String    @id
   shop          String
@@ -30,9 +27,34 @@ model Session {
   collaborator  Boolean?  @default(false)
   emailVerified Boolean?  @default(false)
 }
-
 model RedeemedPoints {
   id            Int       @id @default(autoincrement())
   customerId    String    @unique
   pointsRedeemed  Int     @default(0)
+}
+
+model CustomerPoints {
+  id            Int       @id @default(autoincrement())
+  customerId    String    @unique
+  pointsBalance Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model RewardRule {
+  id              Int       @id @default(autoincrement())
+  name            String
+  pointsRequired  Int
+  discountType    DiscountType
+  discountValue   Float
+  productId       String?
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED_AMOUNT
+  FREE_PRODUCT
 }

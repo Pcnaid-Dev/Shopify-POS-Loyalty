@@ -1,7 +1,8 @@
 import type { ActionFunction } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { addRedeemedPoints } from "../services/redeemedPoints.server";
+import { updateCustomerPoints } from "../services/redeemedPoints.server";
 import { authenticate } from "app/shopify.server";
+
 // [START points.deduct.action]
 export const action: ActionFunction = async ({ request, params }) => {
   if (request.method === "OPTIONS") {
@@ -26,13 +27,46 @@ export const action: ActionFunction = async ({ request, params }) => {
   // 2. Get the customer ID from the params
   const { customerId } = params;
 
-  const { pointsToDeduct } = await request.json();
   if (!customerId) {
-    throw new Error("Customer ID is required");
+    return json({ error: "Customer ID is required" }, { status: 400 });
   }
 
-  await addRedeemedPoints(customerId, pointsToDeduct);
+  try {
+    const { pointsToDeduct } = await request.json();
+    
+    if (!pointsToDeduct || typeof pointsToDeduct !== 'number' || pointsToDeduct <= 0) {
+      return json({ error: "Valid pointsToDeduct value is required" }, { status: 400 });
+    }
 
-  return json({ message: "Points deducted successfully" });
+    // Use the new updateCustomerPoints function to handle point deduction
+    const result = await updateCustomerPoints(customerId, pointsToDeduct);
+
+    return json(
+      { 
+        message: "Points deducted successfully", 
+        updatedPointsTotal: result.updatedPointsTotal 
+      },
+      {
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Headers": "Authorization, Content-Type",
+        },
+      }
+    );
+  } catch (error) {
+    console.error("Error deducting points:", error);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    
+    return json(
+      { error: errorMessage },
+      { 
+        status: 400,
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Headers": "Authorization, Content-Type",
+        },
+      }
+    );
+  }
 };
 // [END points.deduct.action]
