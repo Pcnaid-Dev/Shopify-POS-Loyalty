@@ -1,0 +1,57 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+client_id = "f6a872ef424b832bf88329c3fbf4a0fd"
+name = "Pcnaid Loyalty & Rewards"
+handle = "pcnaid-loyalty-rewards"
+application_url = "https://app.pcnaid.com"
+embedded = true
+
+[build]
+include_config_on_deploy = true
+dev_store_url = "app-dev-store-v1.myshopify.com"
+automatically_update_urls_on_dev = true
+
+[access.admin]
+direct_api_mode = "online"
+
+[access_scopes]
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = "read_discounts,write_discounts,read_orders,read_price_rules,read_returns,customer_read_customers,customer_read_orders,read_customers,customer_read_customers,customer_write_customers,read_customer_merge,read_content,read_metaobjects"
+optional_scopes = [ "read_shopify_payments_disputes", "read_inventory", "read_product_listings", "read_products", "read_shipping" ]
+
+[auth]
+redirect_urls = [ "https://shopify.dev/apps/default-app-home/api/auth" ]
+
+[webhooks]
+api_version = "2024-10"
+
+  [[webhooks.subscriptions]]
+  topics = [ 
+      "app/scopes_update",
+      "app/uninstalled",
+      "app_subscriptions/update",
+      "checkouts/create",
+      "customer_account_settings/update",
+      "customers/create",
+      "customers/merge",
+      "customers/update",
+      "customers_email_marketing_consent/update",
+      "customers_marketing_consent/update",
+      "discounts/create",
+      "discounts/update",
+      "metafield_definitions/create",
+      "metafield_definitions/update",
+      "order_transactions/create",
+      "orders/paid",
+      "orders/updated",
+      "refunds/create",
+      "returns/approve",
+      "returns/request",
+      "returns/update" 
+    ]
+    compliance_topics = [ "customers/redact", "customers/data_request", "shop/redact" ]
+  uri = "/webhooks/app/uninstalled"
+
+[pos]
+embedded = false
+

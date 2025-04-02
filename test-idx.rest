@@ -1,0 +1,3 @@
+GET https://<your-project-url>/api/v1/environment
+Authorization: Bearer ${{TOKEN}}
+Content-Type: application/json

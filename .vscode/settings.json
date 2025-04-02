@@ -1,0 +1,6 @@
+{
+    "IDX.aI.enableInlineCompletion": true,
+    "IDX.aI.enableCodebaseIndexing": true,
+    "IDX.aI.geminiApiKey": "AIzaSyBHd2jMHdDdYCOHe2Zp42YHbV4aJNSdWQ4",
+    "IDX.aI.geminiModel": "gemini-2.0-flash-exp"
+}
