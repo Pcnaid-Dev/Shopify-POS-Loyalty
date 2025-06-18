@@ -1,68 +1,50 @@
-# Shopify Loyalty & Rewards App
+# Pcnaid Loyalty & Rewards for Shopify
 
-A comprehensive loyalty and rewards solution for Shopify merchants, designed to boost customer retention and engagement. This application allows merchants to create a customizable points-based rewards program that seamlessly integrates with their Shopify store and POS system.
+A full‑stack Remix application that lets merchants run a points‑based loyalty
+programme across Online Store **and** Shopify POS.
 
-## Key Features
-- **Points for Purchases:** Automatically reward customers with points for every dollar they spend.
-- **Customizable Rewards:** Create a variety of rewards, such as percentage discounts, fixed amount discounts, and free shipping.
-- **Customer Account Integration:** A floating widget on the storefront allows customers to view their point balance and redeem rewards.
-- **Merchant Admin UI:** An easy-to-use interface within the Shopify Admin for configuring the loyalty program, managing rewards, and viewing customer data.
-- **Shopify POS Extension:** Enables merchants to manage customer loyalty directly from the Point of Sale interface.
-
----
-
-## Project Status
-
-### Implemented Features
-
-* **Merchant Admin Panel:**
-    * Configuration of basic point-earning rules (e.g., points per dollar spent).
-    * Creation and management of rewards (fixed amount, percentage discount).
-    * A dashboard to view enrolled customers and their point balances.
-* **Storefront UI Widget:**
-    * Displays the customer's current point balance when logged in.
-    * Allows customers to see available rewards.
-    * Generates discount codes for redeemed rewards that can be applied at checkout.
-* **Core Points Logic:**
-    * An API endpoint that receives Shopify order creation webhooks.
-    * A system to calculate and add points to a customer's account after a purchase is completed.
-
-### Roadmap (Yet to be Implemented)
-
-* **Advanced Rewards:**
-    * Free shipping rewards.
-    * Free product rewards.
-    * Tiered loyalty levels (e.g., Bronze, Silver, Gold) with different earning rates.
-* **Email Notifications:**
-    * Automated emails to notify customers of point balance changes and earned rewards.
-* **Shopify POS Extension (High Priority):**
-    * **Customer Lookup:** Merchants will be able to search for a customer in the POS system using their **name, email, or phone number**.
-    * **Points & Rewards Display:** Once a customer is associated with the sale, the POS UI will display their current point balance and a list of available rewards they are eligible for. These reward options are based on rules set by the merchant in the Admin UI.
-    * **One-Click Redemption:** The merchant can select one of the available rewards directly within the POS interface.
-    * **Automatic Cart Updates:** Upon selection, the reward will be automatically applied to the cart as a discount or line item, reflecting the change in the total price before payment.
-* **Advanced Analytics:**
-    * A comprehensive analytics dashboard for merchants to track the ROI of the loyalty program, view redemption rates, and identify top customers.
+| Key stack elements | Details |
+|--------------------|---------|
+| Framework          | Remix • TypeScript • Vite |
+| Shopify SDKs       | @shopify/shopify‑app‑remix, Polaris, App Bridge |
+| Datastore          | Prisma ORM (SQLite in dev) |
+| POS extension      | `@shopify/ui-extensions[‑react]` |
+| Tests              | Playwright (mock scaffolding) |
 
 ---
 
-## Tech Stack
-* **Backend:** Node.js with Express.js (or Ruby on Rails)
-* **Frontend:** React.js, Polaris
-* **Database:** PostgreSQL
-* **Shopify Integration:** Shopify App CLI, Shopify API (Admin, Storefront, and POS Extension APIs)
+## 1 . Features – **Implemented**
+
+| Domain | What works today | Location |
+|--------|------------------|----------|
+| **Points ledger** | Table `CustomerPoints` stores the running balance; automatically initialised the first time you ask for a customer’s balance. | `prisma/schema.prisma`, loader `points.$customerId.tsx`  [oai_citation:0‡Shopify Loyalty App.pdf](file-service://file-7HP44smo4EqcQoCPUQiPUq) |
+| **Rewards catalogue** | Admin UI to create / edit / toggle reward rules (fixed amount, % off, or free product). | `app/routes/rewards.tsx`  [oai_citation:1‡Shopify Loyalty App.pdf](file-service://file-7HP44smo4EqcQoCPUQiPUq) |
+| **Programme config** | Per‑shop “points per dollar” setting. | `app/routes/programs.tsx` |
+| **POS extension** | Shows customer balance **inside** POS once a staff member selects/looks up a customer; lists eligible rewards; one‑tap redemption applies cart discount **and** deducts points server‑side. | `extensions/loyalty-extension/*` |
+| **Server APIs** | `GET /points/:customerId` (balance + eligible rewards) and `POST /points/:customerId/deduct` (atomic point deduction). | `points.$customerId*.tsx`, `services/redeemedPoints.server.ts` |
+| **Webhooks** | Cleans up sessions on `APP_UNINSTALLED`. | `webhooks.app.uninstalled.tsx` |
+| **Scaffolding tests** | Playwright shell tests for POS flows. | `tests/pos-extension.test.ts` |
+
+> **Why the POS extension already satisfies “search by phone/email/name”**  
+> Shopify POS surfaces a customer search box (phone, email, etc.). Once the
+> staff member picks a customer, that customer’s **ID** is injected into the
+> extension via the POS API (`api.customer.id`) and the extension renders the
+> loyalty UI. No extra code is required.  [oai_citation:2‡Shopify Loyalty App.pdf](file-service://file-7HP44smo4EqcQoCPUQiPUq)
 
 ---
 
-## Getting Started
+## 2. Roadmap – **Yet to be implemented**
 
-### Prerequisites
-- Node.js and npm
-- A Shopify Partner account and development store
-- Shopify CLI
+| Priority | Gap | Suggested next step |
+|----------|-----|---------------------|
+| 🔴 | **Automatic point accrual** after each order via `ORDERS_CREATE` webhook. | Hook → calculate points → upsert ledger. |
+| 🔴 | **Free‑product reward** redemption flow. | Use Cart API `addLineItem` for `discountType === FREE_PRODUCT`. |
+| 🔴 | **Customer‑facing widget** (Online Store) to show balance in My Account. | Theme App Extension or App Proxy. |
+| 🟠 | **Analytics charts** on dashboard (currently hard‑coded sample data). | Query Prisma + ShopifyQL; feed into Polaris Charts. |
+| 🟠 | **Unit / integration tests** (current tests are mocks). | Replace stubs with real Playwright + POS emulator. |
+| 🟡 | **Session‑token auth** for POS → API calls (authenticate via HMAC instead of admin session). | Accept JWT in `Authorization` header. |
+| 🟡 | Multi‑currency support for fixed‑amount discounts. | Read shop currency via REST Admin. |
 
-### Installation
-1.  Clone the repository: `git clone [URL]`
-2.  Install dependencies: `npm install`
-3.  Set up your `.env` file with Shopify API keys.
-4.  Run the application: `npm run dev`
-5.  Deploy the app to a hosting service (e.g., Heroku, Fly.io) and install it on your development store.
+---
+
+## 3. Project layout
