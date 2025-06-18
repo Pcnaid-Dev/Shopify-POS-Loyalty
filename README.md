@@ -48,3 +48,72 @@ programme across Online Store **and** Shopify POS.
 ---
 
 ## 3. Project layout
+
+pcnaid-loyalty-and-rewards/
+├─ app/                # Remix server‑side + admin UI
+│  ├─ routes/          # Route modules
+│  ├─ services/        # DB helpers
+│  └─ …
+├─ extensions/
+│  └─ loyalty-extension/   # Shopify POS UI Extension
+├─ prisma/             # Schema & migrations
+└─ tests/              # Playwright tests
+
+---
+
+## 4. Getting started
+
+```bash
+# 1. Clone & install
+pnpm install       # or npm / yarn
+
+# 2. Environment
+cp .env.example .env
+# -> fill SHOPIFY_API_KEY, SHOPIFY_API_SECRET, SCOPES, SHOPIFY_APP_URL
+
+# 3. DB
+pnpx prisma migrate dev --name init
+pnpx prisma db seed       # optional test data
+
+# 4. Tunnel + dev server
+pnpm run dev              # Remix (Port 3000)
+pnpm --filter loyalty-extension dev   # POS extension hot‑reload
+
+# 5. Shopify CLI
+shopify app configure
+shopify app tunnel start
+shopify app dev
+
+## 5. POS extension build & deploy
+
+cd extensions/loyalty-extension
+pnpm run build                  # bundles to dist/
+shopify extension push
+shopify extension deploy
+
+The extension target is pos.customer-details.block.render, so it appears in
+the customer details pane of Shopify POS.
+
+## 6. Testing
+
+pnpm exec playwright test
+(Replace mock tests with real scenarios first.)
+
+## 7. Contributing
+
+Follow the conventional commit format; run pnpm lint and pnpm format
+before opening a PR. All new features should be accompanied by migration and
+Playwright coverage.
+
+## 8. Licence
+
+MIT (see LICENSE.txt).
+
+
+
+
+
+
+
+
+
